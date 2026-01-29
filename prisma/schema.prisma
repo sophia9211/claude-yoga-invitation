@@ -1,0 +1,177 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum Role {
+  MEMBER
+  INSTRUCTOR
+  ADMIN
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  ATTENDED
+  NO_SHOW
+}
+
+enum MembershipType {
+  DROP_IN
+  PACK_5
+  PACK_10
+  PACK_20
+  MONTHLY
+  ANNUAL
+}
+
+enum MembershipStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// ============================================================================
+// Models
+// ============================================================================
+
+/// User model for members, instructors, and admins
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String?  // Optional, hashed password
+  name      String
+  phone     String?
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bookings   Booking[]
+  membership Membership?
+
+  @@map("users")
+}
+
+/// Instructor model for yoga instructors
+model Instructor {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  bio            String?  @db.Text
+  photo          String?  // URL to photo
+  certifications String[] // Array of certifications
+  specialties    String[] // Array of yoga specialties
+  yearsExp       Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  classes ClassSchedule[]
+
+  @@map("instructors")
+}
+
+/// ClassType model for types of yoga (Hatha, Vinyasa, etc.)
+model ClassType {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?    @db.Text
+  difficulty  Difficulty @default(ALL_LEVELS)
+  duration    Int        // Duration in minutes
+  suitableFor String?    @db.Text // Description of who this class is suitable for
+  imageUrl    String?    // URL to class type image
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  schedules ClassSchedule[]
+
+  @@map("class_types")
+}
+
+/// ClassSchedule model for weekly class schedule
+model ClassSchedule {
+  id           String    @id @default(cuid())
+  classTypeId  String
+  instructorId String
+  dayOfWeek    DayOfWeek
+  startTime    String    // Format: "HH:MM" (24-hour)
+  endTime      String    // Format: "HH:MM" (24-hour)
+  maxCapacity  Int       @default(20)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  classType  ClassType  @relation(fields: [classTypeId], references: [id], onDelete: Cascade)
+  instructor Instructor @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+  bookings   Booking[]
+
+  @@map("class_schedules")
+}
+
+/// Booking model for class reservations
+model Booking {
+  id        String        @id @default(cuid())
+  userId    String
+  classId   String
+  date      DateTime      // The specific date of the class
+  status    BookingStatus @default(CONFIRMED)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relations
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classSchedule ClassSchedule @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate bookings for the same user, class, and date
+  @@unique([userId, classId, date])
+  @@map("bookings")
+}
+
+/// Membership model for membership plans
+model Membership {
+  id           String           @id @default(cuid())
+  userId       String           @unique
+  type         MembershipType
+  startDate    DateTime
+  endDate      DateTime?
+  sessionsLeft Int?             // For session-based memberships (DROP_IN, PACK_5, etc.)
+  status       MembershipStatus @default(ACTIVE)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("memberships")
+}
